@@ -61,6 +61,13 @@ jobs:
       - name: start APIM server
         run: |
           unzip product-apim/modules/distribution/product/target/wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE).zip
+          rm -rf wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/repository/deployment/server/jaggeryapps/publisher/site/public
+          rm -rf wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/repository/deployment/server/jaggeryapps/devportal/site/public
+          rm -rf wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/repository/deployment/server/jaggeryapps/admin/site/public
+          cp -r apim-apps/portals/publisher/site/public/ wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/repository/deployment/server/jaggeryapps/publisher/site
+          cp -r apim-apps/portals/devportal/site/public/ wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/repository/deployment/server/jaggeryapps/devportal/site
+          cp -r apim-apps/portals/admin/site/public/ wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/repository/deployment/server/jaggeryapps/admin/site/public
+          tree wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)
           sh wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/bin/api-manager.sh start
           sleep 5m # sleep for 5 min to start the server
           nc -zv localhost 9443

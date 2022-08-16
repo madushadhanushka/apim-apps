@@ -20,14 +20,22 @@ describe("Tryout API invocations", () => {
     const { publisher, developer, password, } = Utils.getUserInfo();
 
     const apiVersion = '2.0.0';
-    const apiName = Utils.generateName();
-    const apiContext = apiName;
+    let apiName;
+    let apiContext;
     let testApiId;
-    const appName = Utils.generateName();
-    it.only("Tryout API invocations from swagger console", () => {
+    let appName;
+    it.only("Tryout API invocations from swagger console" ,{
+        retries: {
+          runMode: 3,
+          openMode: 0,
+        },
+      }, () => {
         cy.loginToPublisher(publisher, password);
+        apiName = Utils.generateName();
+
         Utils.addAPIWithEndpoints({ name: apiName, version: apiVersion, context: apiContext, endpoint: 'https://petstore.swagger.io/v2/swagger.json' }).then((apiId) => {
             testApiId = apiId;
+            apiContext = apiName;
             Utils.publishAPI(apiId).then(() => {
                 cy.visit(`publisher/apis/${apiId}/deployments`);
                 cy.get('#deploy-btn').should('not.have.class', 'Mui-disabled').click({force:true});
@@ -38,6 +46,7 @@ describe("Tryout API invocations", () => {
 
                 Cypress.on('uncaught:exception', () => false);
 
+                appName = Utils.generateName();
                 // Create an app and subscribe
                 cy.createApp(appName, 'application description');
                 cy.visit(`/devportal/apis/${apiId}/credentials?tenant=carbon.super`);
@@ -78,7 +87,7 @@ describe("Tryout API invocations", () => {
         });
     });
 
-    after(() => {
+    afterEach(() => {
         cy.deleteApp(appName);
         Utils.deleteAPI(testApiId);
     })

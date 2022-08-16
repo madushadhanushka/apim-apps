@@ -20,9 +20,9 @@ import Utils from "@support/utils";
 import APIMenuPage from "../../../support/pages/publisher/APIMenuPage";
 
 describe("Publisher Read-Only Mode", () => {
-    const apiName = 'checkreadonlyapi' + Math.floor(Date.now() / 1000);
+    let apiName;
     const apiVersion = '1.0.0';
-    const apiContext = '/readonlycheck' + Math.floor(Date.now() / 1000);;
+    let apiContext;
     const readOnlyUser = 'internalDeveloper';
     const readOnlyUserPassword = 'test123';
     const creatorPublisher='creatorPublisher';
@@ -30,13 +30,15 @@ describe("Publisher Read-Only Mode", () => {
     const carbonUsername = 'admin';
     const carbonPassword = 'admin';
 
-    before(function () {
+    const initEnvironement = () => {
       //create developer user
         cy.carbonLogin(carbonUsername, carbonPassword);
         cy.addNewUser(readOnlyUser, ['Internal/observer'], readOnlyUserPassword);
         cy.addNewUser(creatorPublisher,  ['Internal/publisher', 'Internal/creator', 'Internal/everyone'], creatorpublisherPassword);
 
         //create an API from publisher portal
+        apiName = 'checkreadonlyapi' + Math.floor(Date.now() / 1000);
+        apiContext = '/readonlycheck' + Math.floor(Date.now() / 1000);
         cy.loginToPublisher(creatorPublisher, creatorpublisherPassword);
         cy.createAndPublishAPIByRestAPIDesign(apiName,apiVersion,apiContext);
 
@@ -96,11 +98,16 @@ describe("Publisher Read-Only Mode", () => {
 
         //login to dev portal as Developer
         cy.loginToPublisher(readOnlyUser, readOnlyUserPassword);
-    })
+    }
 
     //should only be able to view APIs
-    it("Verify Configurations are in Read only mode", () => {
-        
+    it("Verify Configurations are in Read only mode", {
+        retries: {
+            runMode: 6,
+            openMode: 0,
+        },
+    }, () => {
+        initEnvironement();
         //1. should not be able to create APIS
         cy.get('#itest-create-api-menu-button', {timeout: Cypress.config().largeTimeout}).should('not.exist');
 
@@ -194,11 +201,13 @@ describe("Publisher Read-Only Mode", () => {
         cy.get('#api-rate-limiting-api-level').get('[aria-disabled="true"]').should('exist');
         cy.get('#api-rate-limiting-operation-level').get('[aria-disabled="true"]').should('exist');
         cy.get('#operation_throttling_policy').get('[aria-disabled="true"]').should('exist');
-        cy.get(`[id="post/testuri"]`, { timeout: 30000 }).click();
-        cy.get(`[data-testid="description-post/testuri"]`).get('[aria-disabled="true"]').should('exist');
-        cy.get(`[data-testid="summary-post/testuri"]`).get('[aria-disabled="true"]').should('exist');
-        cy.get(`[data-testid="security-post/testuri"]`).get('[aria-disabled="true"]').should('exist');
-        cy.get(`[id="post/testuri-operation_throttling_policy-label"]`).get('[aria-disabled="true"]').should('exist');
+        cy.reload();
+        cy.scrollTo('bottom');
+        cy.get('#post\\/testuri').click();
+        cy.get(`[data-testid="description-post\\/testuri"]`).get('[aria-disabled="true"]').should('exist');
+        cy.get(`[data-testid="summary-post\\/testuri"]`).get('[aria-disabled="true"]').should('exist');
+        cy.get(`[data-testid="security-post\\/testuri"]`).get('[aria-disabled="true"]').should('exist');
+        cy.get(`[id="post\\/testuri-operation_throttling_policy-label"]`).get('[aria-disabled="true"]').should('exist');
         cy.contains('button','Save').should('be.disabled');
 
         //9. API definition
@@ -241,6 +250,7 @@ describe("Publisher Read-Only Mode", () => {
         cy.get('table').get('tbody').get('[data-testid="MUIDataTableBodyRow-0"]').get('[data-testid="MuiDataTableBodyCell-4-0"]').get('[aria-label="Edit creatorscope"]').get('[aria-disabled="true"]').should('exist');
         cy.get('table').get('tbody').get('[data-testid="MUIDataTableBodyRow-0"]').get('[data-testid="MuiDataTableBodyCell-4-0"]').contains('button','Delete').should('be.disabled');
 
+        cy.reload();
         //12. Policies should be checked. (UI issue fixed by PR #11297 in carbon-apimgt)
         cy.get("#left-menu-policies").click();
         cy.get('[data-testid="add-new-api-specific-policy"]', {timeout: Cypress.config().largeTimeout}).click();
@@ -275,15 +285,14 @@ describe("Publisher Read-Only Mode", () => {
         //16. Header buttons should also be disabled
         cy.get('#itest-id-deleteapi-icon-button').should('not.exist');
         cy.get('#create-new-version-btn').should('not.exist');
-    });
-
-    after(function () {
         cy.logoutFromPublisher();
 
         // Test is done. Now delete the api
         cy.loginToPublisher(carbonUsername, carbonPassword);
-        cy.deleteApi(apiName, apiVersion);
+    });
 
+    afterEach(function () {
+        cy.deleteApi(apiName, apiVersion);
         // delete observer user.
         cy.visit(`${Utils.getAppOrigin()}/carbon/user/user-mgt.jsp`);
         cy.deleteUser(readOnlyUser);

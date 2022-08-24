@@ -71,7 +71,7 @@ jobs:
         with:
           record: false
           working-directory: 'apim-apps/tests'
-          spec: '**/*.spec.js'
+          spec: '**/00-verify-that-read-only-user-cannot-create-update-api.spec.js'
       - name: Upload ScreenShots
         uses: actions/upload-artifact@v2
         if: failure()

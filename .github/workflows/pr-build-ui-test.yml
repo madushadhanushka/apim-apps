@@ -1,0 +1,31 @@
+name: pr-builder-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Enter PR link (ex: https://github.com/wso2-extensions/identity-inbound-auth-oauth/pull/1481)"
+        default:
+        required: true
+      jdk:
+        description: "Enter Java version (ex: 8,11)"
+        default:
+        required: true
+
+env:
+  MAVEN_OPTS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.class=standard -Dmaven.wagon.http.retryHandler.count=3
+
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+
+    steps:
+      - name: Print Input
+        run: echo Running the PR builder for PR - ${{ github.event.inputs.pr }}
+      - name: Comment build info
+        run: |
+          owner=$(echo '${{github.event.inputs.pr}}' | cut -d "/" -f 4)
+          repo=$(echo '${{github.event.inputs.pr}}' | cut -d "/" -f 5)
+          pr_number=$(echo '${{github.event.inputs.pr}}' | cut -d "/" -f 7)
+          curl -X POST https://api.github.com/repos/$owner/$repo/issues/$pr_number/comments -H 'Authorization: token ${{secrets.PR_BUILDER_COMMENT}}' -d '{"body":"PR builder started \nLink: https://github.com/wso2/product-is/actions/runs/${{github.run_id}}"}'

@@ -7,10 +7,6 @@ on:
         description: "Enter PR link (ex: https://github.com/wso2-extensions/identity-inbound-auth-oauth/pull/1481)"
         default:
         required: true
-      jdk:
-        description: "Enter Java version (ex: 8,11)"
-        default:
-        required: true
 
 env:
   MAVEN_OPTS: -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false -Dmaven.wagon.http.retryHandler.class=standard -Dmaven.wagon.http.retryHandler.count=3
@@ -28,4 +24,86 @@ jobs:
           owner=$(echo '${{github.event.inputs.pr}}' | cut -d "/" -f 4)
           repo=$(echo '${{github.event.inputs.pr}}' | cut -d "/" -f 5)
           pr_number=$(echo '${{github.event.inputs.pr}}' | cut -d "/" -f 7)
-          curl -X POST https://api.github.com/repos/$owner/$repo/issues/$pr_number/comments -H 'Authorization: token ${{secrets.PR_BUILDER_COMMENT}}' -d '{"body":"PR builder started \nLink: https://github.com/wso2/product-is/actions/runs/${{github.run_id}}"}'
+          echo $owner $repo $pr_number
+      - name: Run hostname
+        run: hostname
+      - name: Fix host entry
+        run: sudo echo "127.0.0.1 $(hostname)" | sudo tee -a /etc/hosts
+      - name: Show hosts
+        run: cat /etc/hosts
+      - name: Checkout master
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: '10'
+          path: apim-apps
+      - name: Set up JDK 11
+        uses: actions/setup-java@v2
+        with:
+          java-version: 11
+          distribution: 'adopt'
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '16'
+      - name: Cache maven packages
+        uses: actions/cache@v2
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2
+          restore-keys: ${{ runner.os }}-m2
+      - name: Checkout Product-APIM
+        uses: actions/checkout@v2
+        with: 
+          repository: wso2/product-apim
+          ref: refs/heads/master
+          path: product-apim
+      - name: Checkout carbon-apimgt
+        uses: actions/checkout@v2
+        with: 
+          repository: wso2/carbon-apimgt
+          ref: refs/heads/master
+          path: carbon-apimgt
+      - name: Run PR builder
+        id: builder_step
+        env:
+          PR_LINK: ${{github.event.inputs.pr}}
+        run: |
+          wget https://raw.githubusercontent.com/madushadhanushka/apim-apps/main/.github/script/pr-builder.sh
+          bash pr-builder.sh
+      - name: Get product.version
+        run: mvn help:evaluate -Dexpression=project.version -q --file product-apim/pom.xml -DforceStdout > ../PRODUCT_APIM_VERSION_FILE
+      - name: Print product.apim.version
+        run: |
+          echo $(cat ../PRODUCT_APIM_VERSION_FILE)
+      - name: start APIM server
+        run: |
+          unzip product-apim/modules/distribution/product/target/wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE).zip
+          printf "\n[apim.devportal]\nenable_application_sharing = true\napplication_sharing_type = \"default\"\n" >> wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/repository/conf/deployment.toml
+          sh wso2am-$(cat ../PRODUCT_APIM_VERSION_FILE)/bin/api-manager.sh start
+          sleep 5m # sleep for 5 min to start the server
+          nc -zv localhost 9443
+      - name: Build apim-apps with Test.
+        run: mvn clean install --file apim-apps/pom.xml
+      - name: Cypress run
+        uses: cypress-io/github-action@v4
+        with:
+          record: false
+          working-directory: 'apim-apps/tests'
+          spec: '**/*.spec.js'
+      - name: Upload ScreenShots
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: apim-apps/tests/cypress/screenshots
+      - name: Upload videos
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: cypress-videos
+          path: apim-apps/tests/cypress/videos
+      - name: Upload Logs
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: server-logs
+          path: wso2am-*/repository/logs
